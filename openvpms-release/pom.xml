@@ -1,0 +1,253 @@
+<!--
+  ~ Version: 1.0
+  ~
+  ~ The contents of this file are subject to the OpenVPMS License Version
+  ~ 1.0 (the 'License'); you may not use this file except in compliance with
+  ~ the License. You may obtain a copy of the License at
+  ~ http://www.openvpms.org/license/
+  ~
+  ~ Software distributed under the License is distributed on an 'AS IS' basis,
+  ~ WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
+  ~ for the specific language governing rights and limitations under the
+  ~ License.
+  ~
+  ~ Copyright 2018 (C) OpenVPMS Ltd. All Rights Reserved.
+  -->
+
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.openvpms</groupId>
+        <artifactId>openvpms</artifactId>
+        <version>2.0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>openvpms-release</artifactId>
+
+    <packaging>pom</packaging>
+    <!-- hack to get round the fact that zip is not a supported package type -->
+
+    <name>OpenVPMS Release</name>
+    <description>The OpenVPMS Release Distribution
+    </description>
+
+    <!-- ========================================================================================================== -->
+    <!-- Report generation notes                                                                                    -->
+    <!--                                                                                                            -->
+    <!-- JasperReports are scaled from A4 to A5 and US-Letter versions using via an Ant script, build-reports.xml   -->
+    <!-- This must be invoked manually using:                                                                       -->
+    <!-- > mvn antrun:run                                                                                         -->
+    <!-- ========================================================================================================== -->
+
+    <dependencies>
+        <dependency>
+            <groupId>org.openvpms</groupId>
+            <artifactId>openvpms-framework</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.openvpms</groupId>
+            <artifactId>openvpms-archetypes</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.openvpms</groupId>
+            <artifactId>openvpms-reports</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.openvpms</groupId>
+            <artifactId>openvpms-felix</artifactId>
+            <version>${project.version}</version>
+            <type>zip</type>
+        </dependency>
+        <dependency>
+            <groupId>org.openvpms</groupId>
+            <artifactId>openvpms-sms</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openvpms</groupId>
+            <artifactId>openvpms-web-app</artifactId>
+            <version>${project.version}</version>
+            <type>war</type>
+        </dependency>
+        <dependency>
+            <groupId>org.openvpms</groupId>
+            <artifactId>openvpms-etl-load</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.openvpms</groupId>
+            <artifactId>jasperreports-scaler</artifactId>
+            <version>1.4</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openvpms</groupId>
+            <artifactId>openvpms-etl-plugin</artifactId>
+            <version>${project.version}</version>
+            <type>zip</type>
+        </dependency>
+        <dependency>
+            <groupId>org.openvpms</groupId>
+            <artifactId>openvpms-db</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-dbcp2</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>${jdbc.groupId}</groupId>
+            <artifactId>${jdbc.artifactId}</artifactId>
+            <version>${jdbc.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>buildnumber-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <!-- use the dependency plugin to get the .adl files from archetypes and sms-->
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>test-compile</phase>
+                        <goals>
+                            <goal>unpack</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <artifactItems>
+                        <artifactItem>
+                            <groupId>org.openvpms</groupId>
+                            <artifactId>openvpms-archetypes</artifactId>
+                            <version>${project.version}</version>
+                            <outputDirectory>target/archetypes</outputDirectory>
+                            <includes>org/**/*.adl,org/**/*.xml</includes>
+                        </artifactItem>
+                        <artifactItem>
+                            <groupId>org.openvpms</groupId>
+                            <artifactId>openvpms-sms</artifactId>
+                            <version>${project.version}</version>
+                            <outputDirectory>target/archetypes</outputDirectory>
+                            <includes>org/**/*.adl</includes>
+                        </artifactItem>
+                        <artifactItem>
+                            <groupId>org.openvpms</groupId>
+                            <artifactId>openvpms-felix</artifactId>
+                            <version>${project.version}</version>
+                            <type>zip</type>
+                            <outputDirectory>target/plugins</outputDirectory>
+                        </artifactItem>
+                    </artifactItems>
+                </configuration>
+            </plugin>
+            <plugin>
+                <!-- use the resources plugin to generate hibernate.properties -->
+                <artifactId>maven-resources-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>resources</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <!-- build the release zip -->
+                <artifactId>maven-assembly-plugin</artifactId>
+                <configuration>
+                    <appendAssemblyId>false</appendAssemblyId>
+                    <descriptors>
+                        <descriptor>src/assemblies/assembly.xml</descriptor>
+                    </descriptors>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>make-assembly</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <!-- helper to load report templates for testing -->
+                <groupId>org.openvpms</groupId>
+                <artifactId>openvpms-report-maven-plugin</artifactId>
+                <version>${project.version}</version>
+                <configuration>
+                    <files>
+                        <file>src/reports/documents-A4.xml</file>
+                        <file>src/reports/reports-A4.xml</file>
+                    </files>
+                    <dialect>${build.hibernate.dialect}</dialect>
+                    <driver>${build.jdbc.driverClassName}</driver>
+                    <url>${build.jdbc.url}</url>
+                    <username>${build.jdbc.username}</username>
+                    <password>${build.jdbc.password}</password>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>${jdbc.groupId}</groupId>
+                        <artifactId>${jdbc.artifactId}</artifactId>
+                        <version>${jdbc.version}</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>hibernate3-maven-plugin</artifactId>
+                <version>2.2</version>
+                <configuration>
+                    <componentProperties>
+                        <drop>true</drop>
+                        <jdk5>true</jdk5>
+                        <configurationfile>target/classes/hibernate.cfg.xml</configurationfile>
+                    </componentProperties>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>${jdbc.groupId}</groupId>
+                        <artifactId>${jdbc.artifactId}</artifactId>
+                        <version>${jdbc.version}</version>
+                    </dependency>
+                    <dependency>
+                        <!-- this dependency is required to get hibernate to
+                             work with cobertura during site generation
+                             see http://jira.codehaus.org/browse/MCOBERTURA-26
+                         -->
+                        <groupId>net.sourceforge.cobertura</groupId>
+                        <artifactId>cobertura</artifactId>
+                        <version>1.9.2</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+            <plugin>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>1.8</version>
+                <configuration>
+                    <tasks>
+                        <property name="compile_classpath" refid="maven.compile.classpath"/>
+                        <ant antfile="${basedir}/build-reports.xml">
+                            <target name="scale"/>
+                        </ant>
+                    </tasks>
+                </configuration>
+            </plugin>
+        </plugins>
+        <resources>
+            <resource>
+                <directory>${basedir}/src/conf/hibernate</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
+    </build>
+
+</project>

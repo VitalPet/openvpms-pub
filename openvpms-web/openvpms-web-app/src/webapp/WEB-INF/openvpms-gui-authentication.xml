@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Version: 1.0
+  ~
+  ~ The contents of this file are subject to the OpenVPMS License Version
+  ~ 1.0 (the 'License'); you may not use this file except in compliance with
+  ~ the License. You may obtain a copy of the License at
+  ~ http://www.openvpms.org/license/
+  ~
+  ~ Software distributed under the License is distributed on an 'AS IS' basis,
+  ~ WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
+  ~ for the specific language governing rights and limitations under the
+  ~ License.
+  ~
+  ~ Copyright 2017 (C) OpenVPMS Ltd. All Rights Reserved.
+  -->
+
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:security="http://www.springframework.org/schema/security"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans-3.2.xsd
+                           http://www.springframework.org/schema/security
+                           http://www.springframework.org/schema/security/spring-security-3.2.xsd">
+
+    <!-- ================================================================== -->
+    <!--                            GUI FILTER CHAIN                        -->
+    <!-- ================================================================== -->
+
+    <bean id="guiExceptionTranslationFilter"
+          class="org.springframework.security.web.access.ExceptionTranslationFilter">
+        <constructor-arg ref="guiAuthenticationEntryPoint"/>
+    </bean>
+
+    <bean id="webDavAuthenticationFilter" class="org.openvpms.web.webdav.servlet.WebDAVAuthenticationFilter">
+        <constructor-arg ref="documentSessionManager"/>
+        <constructor-arg ref="guiUserService"/>
+    </bean>
+
+    <bean id="guiAuthenticationEntryPoint" class="org.openvpms.web.echo.servlet.EchoAuthenticationEntryPoint">
+        <constructor-arg value="/login"/>
+    </bean>
+
+    <bean id="digestFilter" class="org.springframework.security.web.authentication.www.DigestAuthenticationFilter">
+        <property name="userDetailsService" ref="guiUserService"/>
+        <property name="authenticationEntryPoint" ref="digestEntryPoint"/>
+    </bean>
+
+    <bean id="digestEntryPoint"
+          class="org.springframework.security.web.authentication.www.DigestAuthenticationEntryPoint">
+        <property name="realmName" value="OpenVPMS Documents"/>
+        <property name="key" value="uniqueAndSecret"/>
+    </bean>
+
+    <security:http pattern="/document/**" create-session="stateless"
+                   entry-point-ref="digestEntryPoint"
+                   access-decision-manager-ref="authenticatedVoterAccessDecisionManager"
+                   authentication-manager-ref="guiAuthenticationManager">
+        <security:intercept-url pattern='/**' access='IS_AUTHENTICATED_FULLY'/>
+        <security:custom-filter ref="webDavAuthenticationFilter" before="BASIC_AUTH_FILTER"/>
+        <security:custom-filter ref="digestFilter" after="BASIC_AUTH_FILTER"/>
+    </security:http>
+
+    <bean id="wsEntryPoint"
+          class="org.springframework.security.web.authentication.www.BasicAuthenticationEntryPoint">
+        <property name="realmName" value="OpenVPMS Services"/>
+    </bean>
+
+    <security:http pattern="/ws/**" create-session="stateless"
+                   access-decision-manager-ref="authenticatedVoterAccessDecisionManager"
+                   authentication-manager-ref="guiAuthenticationManager">
+        <security:http-basic entry-point-ref="wsEntryPoint"/>
+        <security:anonymous enabled="false"/>
+        <security:intercept-url pattern='/**' access='IS_AUTHENTICATED_FULLY'/>
+    </security:http>
+
+    <security:http pattern="/plugin/resource/**" create-session="stateless" security="none"/>
+
+    <security:http pattern="/plugin/servlet/**" create-session="stateless"
+                   access-decision-manager-ref="authenticatedVoterAccessDecisionManager"
+                   authentication-manager-ref="guiAuthenticationManager">
+        <security:http-basic entry-point-ref="wsEntryPoint"/>
+        <security:anonymous enabled="false"/>
+        <security:intercept-url pattern='/**' access='IS_AUTHENTICATED_FULLY'/>
+    </security:http>
+
+    <!-- enable this to debug webstart -->
+    <!--security:http pattern="/externaledit/**" create-session="stateless"
+                   access-decision-manager-ref="authenticatedVoterAccessDecisionManager"
+                   authentication-manager-ref="guiAuthenticationManager">
+        <security:http-basic/>
+        <security:intercept-url pattern='/**' access='IS_AUTHENTICATED_FULLY'/>
+    </security:http-->
+
+
+    <security:http entry-point-ref="guiAuthenticationEntryPoint"
+                   access-decision-manager-ref="authenticatedVoterAccessDecisionManager"
+                   authentication-manager-ref="guiAuthenticationManager">
+        <security:form-login login-page="/login" default-target-url="/app"
+                             authentication-failure-url="/login?status=error"
+                             always-use-default-target="true"/>
+        <security:intercept-url pattern="/login*" access="IS_AUTHENTICATED_ANONYMOUSLY"/>
+        <security:intercept-url pattern="/login/**" access="IS_AUTHENTICATED_ANONYMOUSLY"/>
+        <security:intercept-url pattern="/images/**" access="IS_AUTHENTICATED_ANONYMOUSLY"/>
+        <security:intercept-url pattern="/webstart/**" access="IS_AUTHENTICATED_ANONYMOUSLY"/>
+        <security:intercept-url pattern="/**" access="IS_AUTHENTICATED_FULLY"/>
+        <security:session-management invalid-session-url="/login"/>
+        <!--security:custom-filter before="FORM_LOGIN_FILTER" ref="skipLoginFilter"/>
+        <security:custom-filter position="FORM_LOGIN_FILTER" ref="authenticationFilter"/-->
+    </security:http>
+
+    <!-- bean id="skipLoginFilter" class="org.openvpms.web.servlet.SkipLoginFilter"/--> <!-- TODO -->
+
+    <bean id="guiAuthenticationManager" class="org.springframework.security.authentication.ProviderManager">
+        <constructor-arg>
+            <list>
+                <ref bean="guiAuthenticationProvider"/>
+            </list>
+        </constructor-arg>
+    </bean>
+
+    <bean id="guiAuthenticationProvider"
+          class="org.springframework.security.authentication.dao.DaoAuthenticationProvider">
+        <property name="userDetailsService" ref="guiUserService"/>
+    </bean>
+
+    <!--  The User DAO bean -->
+    <bean id="guiUserDAO"
+          class="org.openvpms.component.business.dao.hibernate.im.security.UserDAOHibernate">
+        <property name="sessionFactory" ref="sessionFactory"/>
+        <property name="userArchetypes" value="security.user"/>
+    </bean>
+
+    <!-- The User Details service -->
+    <bean id="guiUserService"
+          class="org.openvpms.component.business.service.security.UserService">
+        <constructor-arg index="0">
+            <ref local="guiUserDAO"/>
+        </constructor-arg>
+    </bean>
+
+</beans>
+

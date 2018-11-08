@@ -1,0 +1,214 @@
+/*
+ * Version: 1.0
+ *
+ * The contents of this file are subject to the OpenVPMS License Version
+ * 1.0 (the 'License'); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ * http://www.openvpms.org/license/
+ *
+ * Software distributed under the License is distributed on an 'AS IS' basis,
+ * WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License
+ * for the specific language governing rights and limitations under the
+ * License.
+ *
+ * Copyright 2015 (C) OpenVPMS Ltd. All Rights Reserved.
+ */
+
+package org.openvpms.web.component.im.relationship;
+
+import nextapp.echo2.app.CheckBox;
+import nextapp.echo2.app.Component;
+import nextapp.echo2.app.event.ActionEvent;
+import org.openvpms.component.business.domain.im.common.IMObject;
+import org.openvpms.component.business.domain.im.common.IMObjectRelationship;
+import org.openvpms.component.business.service.archetype.ArchetypeServiceException;
+import org.openvpms.web.component.im.layout.LayoutContext;
+import org.openvpms.web.component.im.query.ResultSet;
+import org.openvpms.web.component.im.table.IMTableModel;
+import org.openvpms.web.component.im.view.IMTableCollectionViewer;
+import org.openvpms.web.component.property.CollectionProperty;
+import org.openvpms.web.echo.event.ActionListener;
+import org.openvpms.web.echo.factory.CheckBoxFactory;
+import org.openvpms.web.resource.i18n.Messages;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+
+/**
+ * Viewer for collections of {@link IMObjectRelationship}s.
+ *
+ * @author Tim Anderson
+ */
+public class RelationshipCollectionViewer extends IMTableCollectionViewer<RelationshipState> {
+
+    /**
+     * Determines if the parent is the source or target of the relationships.
+     */
+    private final boolean parentIsSource;
+
+    /**
+     * The relationship states, keyed on their corresponding relationships.
+     */
+    private Map<IMObjectRelationship, RelationshipState> states = new LinkedHashMap<>();
+
+    /**
+     * Determines if inactive relationships should be displayed.
+     */
+    private final CheckBox hideInactive;
+
+
+    /**
+     * Constructs a {@link RelationshipCollectionViewer}.
+     *
+     * @param property the collection to view
+     * @param parent   the parent object
+     * @param context  the layout context. May be {@code null}
+     * @throws ArchetypeServiceException for any archetype service error
+     */
+    public RelationshipCollectionViewer(CollectionProperty property, IMObject parent, LayoutContext context) {
+        this(property, parent, true, context);
+    }
+
+    /**
+     * Constructs a {@link RelationshipCollectionViewer}.
+     *
+     * @param property     the collection to view
+     * @param parent       the parent object
+     * @param context      the layout context. May be {@code null}
+     * @param hideInactive if {@code true}, display a checkbox to determine if inactive objects should be hidden/shown
+     * @throws ArchetypeServiceException for any archetype service error
+     */
+    public RelationshipCollectionViewer(CollectionProperty property, IMObject parent, boolean hideInactive,
+                                        LayoutContext context) {
+        super(property, parent, context);
+        RelationshipStateQuery query = createQuery(parent);
+        parentIsSource = query.parentIsSource();
+        this.hideInactive = (hideInactive) ? CheckBoxFactory.create(null, true) : null;
+        states = query.query();
+    }
+
+    /**
+     * Returns the selected object.
+     *
+     * @return the selected object. May be {@code null}
+     */
+    public IMObject getSelected() {
+        RelationshipState state = getTable().getTable().getSelected();
+        return (state != null) ? state.getRelationship() : null;
+    }
+
+    /**
+     * Create a new table model.
+     *
+     * @param context the layout context
+     * @return a new table model
+     */
+    protected IMTableModel<RelationshipState> createTableModel(LayoutContext context) {
+        return new RelationshipStateTableModel(context, parentIsSource);
+    }
+
+    /**
+     * Selects an object in the table.
+     *
+     * @param object the object to select
+     */
+    @SuppressWarnings("SuspiciousMethodCalls")
+    protected void setSelected(IMObject object) {
+        RelationshipState state = states.get(object);
+        getTable().getTable().setSelected(state);
+    }
+
+    /**
+     * Creates a new result set.
+     *
+     * @return a new result set
+     */
+    protected ResultSet<RelationshipState> createResultSet() {
+        List<RelationshipState> result = getRelationshipStates();
+        return new RelationshipStateResultSet(result, ROWS);
+    }
+
+    /**
+     * Returns the relationship states, filtering inactive relationships if {@link #hideInactive()} is {@code true}.
+     *
+     * @return the relationships
+     */
+    protected List<RelationshipState> getRelationshipStates() {
+        List<RelationshipState> result;
+        if (hideInactive()) {
+            result = new ArrayList<>();
+            for (RelationshipState relationship : states.values()) {
+                if (relationship.isActive()) {
+                    result.add(relationship);
+                }
+            }
+        } else {
+            result = new ArrayList<>(states.values());
+        }
+        return result;
+    }
+
+    /**
+     * Creates a new relationship state query.
+     *
+     * @param parent the parent object
+     * @return a new query
+     */
+    protected RelationshipStateQuery createQuery(IMObject parent) {
+        return new RelationshipStateQuery(parent, getObjects(), getProperty().getArchetypeRange());
+    }
+
+    /**
+     * Determines if the parent is the source or target of the relationship.
+     *
+     * @return {@code true} if the parent is the source of the relationship,
+     * {@code false} if it is the target
+     */
+    protected boolean parentIsSource() {
+        return parentIsSource;
+    }
+
+    /**
+     * Lays out the component.
+     */
+    @Override
+    protected Component doLayout() {
+        Component component = super.doLayout();
+        if (hideInactive != null) {
+            String name = getProperty().getDisplayName();
+            String label = Messages.format("relationship.hide.inactive", name);
+            hideInactive.setText(label);
+            hideInactive.addActionListener(new ActionListener() {
+                public void onAction(ActionEvent event) {
+                    onHideInactiveChanged();
+                }
+            });
+            component.add(hideInactive, 0);
+        }
+        return component;
+    }
+
+    /**
+     * Determines if inactive objects should be hidden.
+     *
+     * @return {@code true} if inactive objects should be hidden
+     */
+    protected boolean hideInactive() {
+        return hideInactive != null && hideInactive.isSelected();
+    }
+
+    /**
+     * Invoked when the 'hide inactive' checkbox changes.
+     */
+    private void onHideInactiveChanged() {
+        IMTableModel<RelationshipState> model = getTable().getModel().getModel();
+        if (model instanceof RelationshipStateTableModel) {
+            ((RelationshipStateTableModel) model).setShowActive(!hideInactive());
+        }
+        populateTable();
+    }
+
+}
